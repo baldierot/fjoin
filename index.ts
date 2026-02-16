@@ -11,6 +11,10 @@ const { values, positionals } = parseArgs({
       type: "string",
       short: "o",
     },
+    force: {
+      type: "boolean",
+      short: "f",
+    },
     help: {
       type: "boolean",
       short: "h",
@@ -28,6 +32,7 @@ Usage: fjoin [options] <files...>
 
 Options:
   -o, --output <file>  Output to a specific file (default: stdout)
+  -f, --force          Overwrite output file if it exists
   -h, --help           Show this help message
 
 Examples:
@@ -70,8 +75,14 @@ for (const path of positionals) {
 }
 
 if (values.output) {
-  await Bun.write(values.output as string, result);
-  console.error(`Context written to ${values.output}`);
+  const outputPath = values.output as string;
+  const file = Bun.file(outputPath);
+  if (await file.exists() && !values.force) {
+    console.error(`Error: Output file '${outputPath}' already exists. Use -f or --force to overwrite.`);
+    process.exit(1);
+  }
+  await Bun.write(outputPath, result);
+  console.error(`Context written to ${outputPath}`);
 } else {
   process.stdout.write(result);
 }
