@@ -59,7 +59,7 @@ Options:
   -i, --no-gitignore     Ignore .gitignore patterns.
   -I, --include <pattern> Include files matching glob pattern even if gitignored.
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
-  -q, --quiet            Suppress gitignore warnings.
+  -q, --quiet            Suppress all non-essential output (warnings, errors, success messages).
   -h, --help             Show this help message.
 
 Examples:
@@ -67,6 +67,10 @@ Examples:
   fjoin src/*.ts -o combined.md
   fjoin src/* -i
   fjoin src/* -I "*.tsbuildinfo"
+  fjoin src/* -q | pbcopy    # Quiet mode for piping to clipboard (macOS)
+  fjoin src/* -q | xclip     # Quiet mode for piping to clipboard (Linux X11)
+  fjoin src/* -q | wl-copy   # Quiet mode for piping to clipboard (Linux Wayland)
+  fjoin src/* -q | clip      # Quiet mode for piping to clipboard (Windows)
   `);
   process.exit(0);
 }
@@ -99,7 +103,9 @@ async function readIgnoreFile(filePath) {
       .filter(line => line && !line.startsWith('#'));
     return { ig: ignore().add(content), patterns };
   } catch (e) {
-    console.error(`Error reading ignore file '${filePath}': ${e.message}`);
+    if (!values.quiet) {
+      console.error(`Error reading ignore file '${filePath}': ${e.message}`);
+    }
     process.exit(1);
   }
 }
@@ -132,7 +138,9 @@ async function processPath(path) {
     if (!content.endsWith('\n')) result += '\n';
     result += "```\n\n---\n\n";
   } catch (e) {
-    console.error(`Error reading ${path}: ${e.message}`);
+    if (!values.quiet) {
+      console.error(`Error reading ${path}: ${e.message}`);
+    }
   }
 }
 
@@ -172,7 +180,7 @@ const allFiles = await fg(positionals, {
   cwd: process.cwd(),
 });
 
-if (allFiles.length === 0 && positionals.length > 0) {
+if (allFiles.length === 0 && positionals.length > 0 && !values.quiet) {
   console.warn("No files matched. Note: fjoin does not expand directories automatically. Use globs like 'src/**/*'");
 }
 
@@ -249,7 +257,9 @@ if (values.output) {
     // File doesn't exist, proceed
   }
   await writeFile(outputPath, result);
-  console.log(`Context written to ${outputPath}`);
+  if (!values.quiet) {
+    console.log(`Context written to ${outputPath}`);
+  }
 } else {
   process.stdout.write(result);
 }
