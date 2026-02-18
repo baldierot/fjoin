@@ -1,14 +1,14 @@
 {
   "name": "fjoin",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "module": "index.ts",
   "type": "module",
   "bin": {
     "fjoin": "./index.ts"
   },
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "dependencies": {
+    "fast-glob": "^3.3.2"
   },
   "peerDependencies": {
     "typescript": "^5"
