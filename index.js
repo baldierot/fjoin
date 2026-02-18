@@ -44,15 +44,17 @@ if (values.help || (positionals.length === 0)) {
   console.log(`
 fjoin - A simple utility to concatenate files into a single document with clear headers and relative paths.
 
-Usage: fjoin [options] <files...>
+Usage: fjoin <files...> [options]
+
+The <files...> argument accepts file paths or glob patterns.
 
 Options:
-  -o, --output <file>    Output to a specific file (default: stdout)
-  -f, --force            Overwrite output file if it exists
-  -i, --no-gitignore     Ignore .gitignore patterns
-  -I, --include <pat>    Include files matching pattern even if gitignored
-  -q, --quiet            Suppress gitignore warnings
-  -h, --help             Show this help message
+  -o, --output <file>    Save the combined output to a file instead of printing to stdout.
+  -f, --force            Overwrite output file if it exists.
+  -i, --no-gitignore     Ignore .gitignore patterns.
+  -I, --include <pattern> Include files matching glob pattern even if gitignored.
+  -q, --quiet            Suppress gitignore warnings.
+  -h, --help             Show this help message.
 
 Examples:
   fjoin file1.ts file2.ts
