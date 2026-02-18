@@ -11,8 +11,5 @@
     "fast-glob": "^3.3.2",
     "ignore": "^5.3.2",
     "isbinaryfile": "^6.0.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   }
 }
