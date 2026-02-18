@@ -1,10 +1,10 @@
 {
   "name": "fjoin",
   "version": "0.2.0",
-  "module": "index.ts",
+  "module": "index.js",
   "type": "module",
   "bin": {
-    "fjoin": "./index.ts"
+    "fjoin": "./index.js"
   },
   "private": true,
   "dependencies": {

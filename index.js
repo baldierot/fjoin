@@ -57,7 +57,7 @@ Examples:
 
 let result = "";
 
-async function readGitignore(): Promise<ignore.Ignore> {
+async function readGitignore() {
   try {
     const gitignoreContent = await readFile('.gitignore', 'utf-8');
     return ignore().add(gitignoreContent);
@@ -67,7 +67,7 @@ async function readGitignore(): Promise<ignore.Ignore> {
   }
 }
 
-async function processPath(path: string) {
+async function processPath(path) {
   const absolutePath = resolve(path);
   const relativePath = relative(process.cwd(), absolutePath);
 
@@ -88,12 +88,12 @@ async function processPath(path: string) {
     if (!content.endsWith('\n')) result += '\n';
     result += "```\n\n---\n\n";
   } catch (e) {
-    console.error(`Error reading ${path}: ${(e as Error).message}`);
+    console.error(`Error reading ${path}: ${e.message}`);
   }
 }
 
 const gitignore = values['no-gitignore'] ? null : await readGitignore();
-let skippedFiles: string[] = [];
+let skippedFiles = [];
 
 for (const path of positionals) {
   // Expand globs using fast-glob
@@ -135,7 +135,7 @@ if (skippedFiles.length > 0 && !values.quiet) {
 }
 
 if (values.output) {
-  const outputPath = values.output as string;
+  const outputPath = values.output;
 
   try {
     await access(outputPath, constants.F_OK);
