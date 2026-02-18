@@ -16,12 +16,14 @@ npm install -g github:baldierot/fjoin
 fjoin <files...> [options]
 ```
 
+The `<files...>` argument accepts file paths or glob patterns.
+
 ### Options
 
 - `-o, --output <file>`: Save the combined output to a file instead of printing to stdout.
 - `-f, --force`: Overwrite output file if it exists.
 - `-i, --no-gitignore`: Ignore .gitignore patterns.
-- `-I, --include <pattern>`: Include files matching pattern even if gitignored.
+- `-I, --include <pattern>`: Include files matching glob pattern even if gitignored.
 - `-q, --quiet`: Suppress gitignore warnings.
 - `-h, --help`: Show help message.
 
