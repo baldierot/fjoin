@@ -116,22 +116,19 @@ async function readIgnoreFile(filePath) {
   }
 }
 
-async function processPath(path) {
-  const absolutePath = resolve(path);
+async function processPath(absolutePath) {
   const relativePath = relative(process.cwd(), absolutePath);
 
   try {
-    const pathStat = await stat(absolutePath);
-
     // Check if file is binary using content-based detection
     const binary = await isBinaryFile(absolutePath);
     if (binary) {
-      skippedBinaryFiles.push(path);
+      skippedBinaryFiles.push(absolutePath);
       return;
     }
 
     const content = await readFile(absolutePath, 'utf-8');
-    const ext = path.split('.').pop() || '';
+    const ext = relativePath.split('.').pop() || '';
 
     result += `# FILE: ${relativePath}\n\n`;
     result += "```" + ext + "\n";
@@ -140,7 +137,7 @@ async function processPath(path) {
     result += "```\n\n---\n\n";
   } catch (e) {
     if (!values.quiet) {
-      console.error(`Error reading ${path}: ${e.message}`);
+      console.error(`Error reading ${absolutePath}: ${e.message}`);
     }
   }
 }
@@ -151,17 +148,25 @@ const customIgnoreFiles = values['ignore-file'] || [];
 
 // Expand include patterns to get absolute file paths
 const includeFiles = new Set();
-for (const pattern of includePatterns) {
-  const files = await fg.glob(pattern, { onlyFiles: true });
+for (let pattern of includePatterns) {
+  try {
+    const s = await stat(resolve(pattern));
+    if (s.isDirectory()) pattern = pattern.replace(/\/$/, '') + '/**/*';
+  } catch { /* not a real path, treat as glob */ }
+  const files = await fg.glob(pattern, { onlyFiles: true, absolute: true });
   for (const file of files) {
-    includeFiles.add(resolve(file));
+    includeFiles.add(file);
   }
 }
 
 // Expand exclude patterns to get absolute file paths
 const excludePatterns = values.exclude || [];
 const excludeFiles = new Set();
-for (const pattern of excludePatterns) {
+for (let pattern of excludePatterns) {
+  try {
+    const s = await stat(resolve(pattern));
+    if (s.isDirectory()) pattern = pattern.replace(/\/$/, '') + '/**/*';
+  } catch { /* not a real path, treat as glob */ }
   const files = await fg.glob(pattern, { onlyFiles: true, absolute: true });
   for (const file of files) {
     excludeFiles.add(file);
@@ -196,7 +201,7 @@ const expandedPositionals = await Promise.all(
   })
 );
 
-const allFiles = await fg(expandedPositionals, {
+const allFiles = await fg.glob(expandedPositionals, {
   dot: true,
   onlyFiles: true,
   absolute: true,
