@@ -4,6 +4,7 @@ import { resolve, relative } from "node:path";
 import { stat, readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import fg from "fast-glob";
+import ignore from "ignore";
 
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
@@ -15,6 +16,14 @@ const { values, positionals } = parseArgs({
     force: {
       type: "boolean",
       short: "f",
+    },
+    'no-gitignore': {
+      type: "boolean",
+      short: "i",
+    },
+    quiet: {
+      type: "boolean",
+      short: "q",
     },
     help: {
       type: "boolean",
@@ -32,18 +41,31 @@ fjoin - A simple utility to concatenate files into a single document with clear 
 Usage: fjoin [options] <files...>
 
 Options:
-  -o, --output <file>  Output to a specific file (default: stdout)
-  -f, --force          Overwrite output file if it exists
-  -h, --help           Show this help message
+  -o, --output <file>    Output to a specific file (default: stdout)
+  -f, --force            Overwrite output file if it exists
+  -i, --no-gitignore     Ignore .gitignore patterns
+  -q, --quiet            Suppress gitignore warnings
+  -h, --help             Show this help message
 
 Examples:
   fjoin file1.ts file2.ts
   fjoin src/*.ts -o combined.md
+  fjoin src/* -i
   `);
   process.exit(0);
 }
 
 let result = "";
+
+async function readGitignore(): Promise<ignore.Ignore> {
+  try {
+    const gitignoreContent = await readFile('.gitignore', 'utf-8');
+    return ignore().add(gitignoreContent);
+  } catch {
+    // .gitignore doesn't exist, return an empty ignore instance
+    return ignore();
+  }
+}
 
 async function processPath(path: string) {
   const absolutePath = resolve(path);
@@ -70,6 +92,9 @@ async function processPath(path: string) {
   }
 }
 
+const gitignore = values['no-gitignore'] ? null : await readGitignore();
+let skippedFiles: string[] = [];
+
 for (const path of positionals) {
   // Expand globs using fast-glob
   const files = await fg.glob(path, { onlyFiles: true });
@@ -77,15 +102,36 @@ for (const path of positionals) {
   if (files.length === 0) {
     // Try as direct file path
     try {
+      const absolutePath = resolve(path);
+      if (gitignore) {
+        const relativePath = relative(process.cwd(), absolutePath);
+        if (gitignore.ignores(relativePath)) {
+          skippedFiles.push(relativePath);
+          continue;
+        }
+      }
       await processPath(path);
     } catch {
       console.error(`Error: No files found matching '${path}'`);
     }
   } else {
     for (const file of files) {
+      const relativePath = relative(process.cwd(), file);
+      if (gitignore && gitignore.ignores(relativePath)) {
+        skippedFiles.push(relativePath);
+        continue;
+      }
       await processPath(file);
     }
   }
+}
+
+if (skippedFiles.length > 0 && !values.quiet) {
+  console.warn(`Warning: ${skippedFiles.length} gitignored file(s) skipped:`);
+  for (const file of skippedFiles) {
+    console.warn(`  ${file}`);
+  }
+  console.warn(`Use -i/--no-gitignore to include them, or -q/--quiet to suppress this warning.`);
 }
 
 if (values.output) {
