@@ -27,6 +27,11 @@ const { values, positionals } = parseArgs({
       multiple: true,
       short: "I",
     },
+    'ignore-file': {
+      type: "string",
+      short: "g",
+      multiple: true,
+    },
     quiet: {
       type: "boolean",
       short: "q",
@@ -53,6 +58,7 @@ Options:
   -f, --force            Overwrite output file if it exists.
   -i, --no-gitignore     Ignore .gitignore patterns.
   -I, --include <pattern> Include files matching glob pattern even if gitignored.
+  -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
   -q, --quiet            Suppress gitignore warnings.
   -h, --help             Show this help message.
 
@@ -79,6 +85,20 @@ async function readGitignore() {
   } catch {
     // .gitignore doesn't exist, return an empty ignore instance
     return ignore();
+  }
+}
+
+async function readIgnoreFile(filePath) {
+  try {
+    const content = await readFile(filePath, 'utf-8');
+    const patterns = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+    return { ig: ignore().add(content), patterns };
+  } catch (e) {
+    console.error(`Error reading ignore file '${filePath}': ${e.message}`);
+    process.exit(1);
   }
 }
 
@@ -116,6 +136,7 @@ async function processPath(path) {
 
 const gitignore = values['no-gitignore'] ? null : await readGitignore();
 const includePatterns = values.include || [];
+const customIgnoreFiles = values['ignore-file'] || [];
 
 // Expand include patterns to get absolute file paths
 const includeFiles = new Set();
@@ -124,6 +145,16 @@ for (const pattern of includePatterns) {
   for (const file of files) {
     includeFiles.add(resolve(file));
   }
+}
+
+// Each entry is { ig, patterns }
+const customIgnores = await Promise.all(
+  customIgnoreFiles.map(f => readIgnoreFile(f))
+);
+
+// Merge all custom patterns into the global tracking arrays
+for (const { patterns } of customIgnores) {
+  gitignorePatterns.push(...patterns);
 }
 
 let skippedFiles = [];
@@ -147,27 +178,30 @@ if (allFiles.length === 0 && positionals.length > 0) {
 for (const absolutePath of allFiles) {
   const relPath = relative(process.cwd(), absolutePath);
 
-  // Check Gitignore
-  if (gitignore) {
-    const isIgnored = gitignore.ignores(relPath);
-    const isForceIncluded = includeFiles.has(absolutePath);
+  // Existing gitignore check
+  const isGitIgnored = gitignore ? gitignore.ignores(relPath) : false;
 
-    if (isIgnored && !isForceIncluded) {
-      skippedFiles.push(relPath);
+  // New: check all custom ignore files
+  const isCustomIgnored = customIgnores.some(({ ig }) => ig.ignores(relPath));
 
-      // Track which pattern caused the skip (for the warning report)
-      for (const pattern of gitignorePatterns) {
-        if (ignore().add(pattern).ignores(relPath)) {
-          skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
-          break;
-        }
+  const isIgnored = isGitIgnored || isCustomIgnored;
+  const isForceIncluded = includeFiles.has(absolutePath);
+
+  if (isIgnored && !isForceIncluded) {
+    skippedFiles.push(relPath);
+
+    // Pattern attribution: check gitignore patterns first, then custom
+    for (const pattern of gitignorePatterns) {
+      if (ignore().add(pattern).ignores(relPath)) {
+        skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+        break;
       }
-      continue; // Skip this file
     }
+    continue;
+  }
 
-    if (isIgnored && isForceIncluded) {
-      forceIncludedFiles.push(relPath);
-    }
+  if (isIgnored && isForceIncluded) {
+    forceIncludedFiles.push(relPath);
   }
 
   // Process the file
