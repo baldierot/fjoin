@@ -52,6 +52,7 @@ fjoin - A simple utility to concatenate files into a single document with clear 
 Usage: fjoin <files...> [options]
 
 The <files...> argument accepts file paths or glob patterns.
+Always quote glob patterns to prevent shell expansion. Use **/* for recursive matching.
 
 Options:
   -o, --output <file>    Save the combined output to a file instead of printing to stdout.
@@ -64,13 +65,13 @@ Options:
 
 Examples:
   fjoin file1.ts file2.ts
-  fjoin src/*.ts -o combined.md
-  fjoin src/* -i
-  fjoin src/* -I "*.tsbuildinfo"
-  fjoin src/* -q | pbcopy    # Quiet mode for piping to clipboard (macOS)
-  fjoin src/* -q | xclip     # Quiet mode for piping to clipboard (Linux X11)
-  fjoin src/* -q | wl-copy   # Quiet mode for piping to clipboard (Linux Wayland)
-  fjoin src/* -q | clip      # Quiet mode for piping to clipboard (Windows)
+  fjoin "src/**/*.ts" -o combined.md
+  fjoin "src/*" -i
+  fjoin "src/*" -I "*.tsbuildinfo"
+  fjoin "src/*" -q | pbcopy    # Quiet mode for piping to clipboard (macOS)
+  fjoin "src/*" -q | xclip     # Quiet mode for piping to clipboard (Linux X11)
+  fjoin "src/*" -q | wl-copy   # Quiet mode for piping to clipboard (Linux Wayland)
+  fjoin "src/*" -q | clip      # Quiet mode for piping to clipboard (Windows)
   `);
   process.exit(0);
 }
