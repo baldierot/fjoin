@@ -73,6 +73,8 @@ Examples:
 
 let result = "";
 let gitignorePatterns = [];
+let skippedDirectories = [];
+let skippedBinaryFiles = [];
 
 async function readGitignore() {
   try {
@@ -110,14 +112,14 @@ async function processPath(path) {
     const pathStat = await stat(absolutePath);
 
     if (pathStat.isDirectory()) {
-      console.error(`Skipping directory: ${path} (pass files or use globs)`);
+      skippedDirectories.push(path);
       return;
     }
 
     // Check if file is binary using content-based detection
     const binary = await isBinaryFile(absolutePath);
     if (binary) {
-      console.error(`Skipping binary file: ${path}`);
+      skippedBinaryFiles.push(path);
       return;
     }
 
@@ -208,6 +210,20 @@ for (const absolutePath of allFiles) {
   await processPath(absolutePath);
 }
 
+if (skippedDirectories.length > 0 && !values.quiet) {
+  console.warn(`Warning: ${skippedDirectories.length} director${skippedDirectories.length !== 1 ? 'ies' : 'y'} skipped (pass files or use globs like 'dir/**/*'):`);
+  for (const dir of skippedDirectories) {
+    console.warn(`  ${dir}`);
+  }
+}
+
+if (skippedBinaryFiles.length > 0 && !values.quiet) {
+  console.warn(`Warning: ${skippedBinaryFiles.length} binary file(s) skipped:`);
+  for (const file of skippedBinaryFiles) {
+    console.warn(`  ${file}`);
+  }
+}
+
 if (forceIncludedFiles.length > 0 && !values.quiet) {
   console.warn(`${forceIncludedFiles.length} gitignored file(s) included via --include.`);
 }
@@ -233,7 +249,7 @@ if (values.output) {
     // File doesn't exist, proceed
   }
   await writeFile(outputPath, result);
-  console.error(`Context written to ${outputPath}`);
+  console.log(`Context written to ${outputPath}`);
 } else {
   process.stdout.write(result);
 }
