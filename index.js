@@ -21,6 +21,11 @@ const { values, positionals } = parseArgs({
       type: "boolean",
       short: "i",
     },
+    include: {
+      type: "string",
+      multiple: true,
+      short: "I",
+    },
     quiet: {
       type: "boolean",
       short: "q",
@@ -44,6 +49,7 @@ Options:
   -o, --output <file>    Output to a specific file (default: stdout)
   -f, --force            Overwrite output file if it exists
   -i, --no-gitignore     Ignore .gitignore patterns
+  -I, --include <pat>    Include files matching pattern even if gitignored
   -q, --quiet            Suppress gitignore warnings
   -h, --help             Show this help message
 
@@ -51,15 +57,21 @@ Examples:
   fjoin file1.ts file2.ts
   fjoin src/*.ts -o combined.md
   fjoin src/* -i
+  fjoin src/* -I "*.tsbuildinfo"
   `);
   process.exit(0);
 }
 
 let result = "";
+let gitignorePatterns = [];
 
 async function readGitignore() {
   try {
     const gitignoreContent = await readFile('.gitignore', 'utf-8');
+    // Parse and store patterns
+    gitignorePatterns = gitignoreContent.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
     return ignore().add(gitignoreContent);
   } catch {
     // .gitignore doesn't exist, return an empty ignore instance
@@ -93,45 +105,88 @@ async function processPath(path) {
 }
 
 const gitignore = values['no-gitignore'] ? null : await readGitignore();
+const includePatterns = values.include || [];
+
+// Expand include patterns to get absolute file paths
+const includeFiles = new Set();
+for (const pattern of includePatterns) {
+  const files = await fg.glob(pattern, { onlyFiles: true });
+  for (const file of files) {
+    includeFiles.add(resolve(file));
+  }
+}
+
 let skippedFiles = [];
+let skippedPatterns = new Map();
+let forceIncludedFiles = [];
 
 for (const path of positionals) {
-  // Expand globs using fast-glob
-  const files = await fg.glob(path, { onlyFiles: true });
+  // Check if path is a glob pattern or an absolute file
+  const isGlob = path.includes('*') || path.includes('?') || path.includes('[');
+  const absolutePath = resolve(path);
 
-  if (files.length === 0) {
-    // Try as direct file path
+  if (isGlob) {
+    // Expand globs using fast-glob
+    const files = await fg.glob(path, { onlyFiles: true });
+
+    for (const file of files) {
+      const absPath = resolve(file);
+      const relPath = relative(process.cwd(), file);
+      if (gitignore && !includeFiles.has(absPath) && gitignore.ignores(relPath)) {
+        skippedFiles.push(relPath);
+        // Track which pattern caused this file to be skipped
+        for (const pattern of gitignorePatterns) {
+          const filter = ignore().add(pattern).createFilter();
+          if (!filter(relPath)) {
+            skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+            break;
+          }
+        }
+        continue;
+      } else if (gitignore && includeFiles.has(absPath) && gitignore.ignores(relPath)) {
+        // File was gitignored but force-included
+        forceIncludedFiles.push(relPath);
+      }
+      await processPath(file);
+    }
+  } else {
+    // Process as direct file path
     try {
-      const absolutePath = resolve(path);
       if (gitignore) {
-        const relativePath = relative(process.cwd(), absolutePath);
-        if (gitignore.ignores(relativePath)) {
-          skippedFiles.push(relativePath);
+        const relPath = relative(process.cwd(), absolutePath);
+        if (!includeFiles.has(absolutePath) && gitignore.ignores(relPath)) {
+          skippedFiles.push(relPath);
+          // Track which pattern caused this file to be skipped
+          for (const pattern of gitignorePatterns) {
+            const filter = ignore().add(pattern).createFilter();
+            if (!filter(relPath)) {
+              skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+              break;
+            }
+          }
           continue;
+        } else if (includeFiles.has(absolutePath) && gitignore.ignores(relPath)) {
+          // File was gitignored but force-included
+          forceIncludedFiles.push(relPath);
         }
       }
       await processPath(path);
-    } catch {
-      console.error(`Error: No files found matching '${path}'`);
-    }
-  } else {
-    for (const file of files) {
-      const relativePath = relative(process.cwd(), file);
-      if (gitignore && gitignore.ignores(relativePath)) {
-        skippedFiles.push(relativePath);
-        continue;
-      }
-      await processPath(file);
+    } catch (e) {
+      console.error(`Error: ${e.message}`);
     }
   }
 }
 
+if (forceIncludedFiles.length > 0 && !values.quiet) {
+  console.warn(`${forceIncludedFiles.length} gitignored file(s) included via --include.`);
+}
+
 if (skippedFiles.length > 0 && !values.quiet) {
   console.warn(`Warning: ${skippedFiles.length} gitignored file(s) skipped:`);
-  for (const file of skippedFiles) {
-    console.warn(`  ${file}`);
+  for (const [pattern, count] of skippedPatterns) {
+    console.warn(`  ${pattern} (${count} file${count !== 1 ? 's' : ''})`);
   }
-  console.warn(`Use -i/--no-gitignore to include them, or -q/--quiet to suppress this warning.`);
+  console.warn(`Use -i/--no-gitignore to include them, or -I/--include <pattern> to selectively include.`);
 }
 
 if (values.output) {
