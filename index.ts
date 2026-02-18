@@ -1,11 +1,12 @@
-#!/usr/bin/env bun
-import { parseArgs } from "util";
-import { resolve, relative } from "path";
-
-import { stat } from "fs/promises";
+#!/usr/bin/env node
+import { parseArgs } from "node:util";
+import { resolve, relative } from "node:path";
+import { stat, readFile, writeFile, access } from "node:fs/promises";
+import { constants } from "node:fs";
+import fg from "fast-glob";
 
 const { values, positionals } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: process.argv.slice(2),
   options: {
     output: {
       type: "string",
@@ -47,41 +48,59 @@ let result = "";
 async function processPath(path: string) {
   const absolutePath = resolve(path);
   const relativePath = relative(process.cwd(), absolutePath);
-  
+
   try {
     const pathStat = await stat(absolutePath);
-    
+
     if (pathStat.isDirectory()) {
       console.error(`Skipping directory: ${path} (pass files or use globs)`);
       return;
     }
 
-    const file = Bun.file(absolutePath);
-    const content = await file.text();
+    const content = await readFile(absolutePath, 'utf-8');
     const ext = path.split('.').pop() || '';
-    
+
     result += `# FILE: ${relativePath}\n\n`;
     result += "```" + ext + "\n";
     result += content;
     if (!content.endsWith('\n')) result += '\n';
     result += "```\n\n---\n\n";
   } catch (e) {
-    console.error(`Error reading ${path}: ${e.message}`);
+    console.error(`Error reading ${path}: ${(e as Error).message}`);
   }
 }
 
 for (const path of positionals) {
-  await processPath(path);
+  // Expand globs using fast-glob
+  const files = await fg.glob(path, { onlyFiles: true });
+
+  if (files.length === 0) {
+    // Try as direct file path
+    try {
+      await processPath(path);
+    } catch {
+      console.error(`Error: No files found matching '${path}'`);
+    }
+  } else {
+    for (const file of files) {
+      await processPath(file);
+    }
+  }
 }
 
 if (values.output) {
   const outputPath = values.output as string;
-  const file = Bun.file(outputPath);
-  if (await file.exists() && !values.force) {
-    console.error(`Error: Output file '${outputPath}' already exists. Use -f or --force to overwrite.`);
-    process.exit(1);
+
+  try {
+    await access(outputPath, constants.F_OK);
+    if (!values.force) {
+      console.error(`Error: Output file '${outputPath}' already exists. Use -f or --force to overwrite.`);
+      process.exit(1);
+    }
+  } catch {
+    // File doesn't exist, proceed
   }
-  await Bun.write(outputPath, result);
+  await writeFile(outputPath, result);
   console.error(`Context written to ${outputPath}`);
 } else {
   process.stdout.write(result);
