@@ -6,6 +6,21 @@ import { constants } from "node:fs";
 import fg from "fast-glob";
 import ignore from "ignore";
 
+// Common binary file extensions to skip
+const BINARY_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'webp', 'tiff', 'svg',
+  'zip', 'tar', 'gz', 'tgz', 'rar', '7z', 'xz', 'bz2',
+  'exe', 'dll', 'so', 'dylib', 'bin', 'elf',
+  'mp3', 'mp4', 'avi', 'mov', 'wav', 'flac', 'ogg', 'm4a', 'mkv',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
+  'sqlite', 'db',
+  'class', 'jar', 'war', 'node', 'wasm',
+]);
+
+function isBinaryFile(ext) {
+  return BINARY_EXTENSIONS.has(ext.toLowerCase());
+}
+
 const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
   options: {
@@ -91,8 +106,13 @@ async function processPath(path) {
       return;
     }
 
-    const content = await readFile(absolutePath, 'utf-8');
     const ext = path.split('.').pop() || '';
+    if (isBinaryFile(ext)) {
+      console.error(`Skipping binary file: ${path}`);
+      return;
+    }
+
+    const content = await readFile(absolutePath, 'utf-8');
 
     result += `# FILE: ${relativePath}\n\n`;
     result += "```" + ext + "\n";
