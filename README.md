@@ -18,7 +18,7 @@ fjoin <files...> [options]
 
 The `<files...>` argument accepts file paths or glob patterns.
 
-**Important:** Always quote glob patterns (e.g., `"src/**/*"`) to prevent your shell from expanding them before fjoin receives them. Use `**/*` to match files recursively; `*` only matches one level deep.
+**Important:** Always quote glob patterns (e.g., `"src/**/*"`) to prevent your shell from expanding them before fjoin receives them.
 
 ### Options
 
@@ -45,7 +45,7 @@ fjoin "src/**/*.ts" --output combined.md
 
 Include files that are ignored by .gitignore:
 ```bash
-fjoin "src/**/*" --no-gitignore
+fjoin src/ --no-gitignore
 ```
 
 Selectively include gitignored files:

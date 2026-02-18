@@ -84,7 +84,6 @@ Examples:
 
 let result = "";
 let gitignorePatterns = [];
-let skippedDirectories = [];
 let skippedBinaryFiles = [];
 
 async function readGitignore() {
@@ -123,11 +122,6 @@ async function processPath(path) {
 
   try {
     const pathStat = await stat(absolutePath);
-
-    if (pathStat.isDirectory()) {
-      skippedDirectories.push(path);
-      return;
-    }
 
     // Check if file is binary using content-based detection
     const binary = await isBinaryFile(absolutePath);
@@ -188,17 +182,29 @@ let skippedFiles = [];
 let skippedPatterns = new Map();
 let forceIncludedFiles = [];
 
-// 1. Unified Globbing: Pass all positional arguments to fast-glob directly.
-// This handles explicit files ("index.js") and patterns ("src/**/*.ts") identically.
-const allFiles = await fg(positionals, {
-  dot: true,           // Allow matching dotfiles
-  onlyFiles: true,     // Ignore directories (equivalent to your manual stat check)
-  absolute: true,      // Return absolute paths for easier comparison
+const expandedPositionals = await Promise.all(
+  positionals.map(async (p) => {
+    try {
+      const s = await stat(resolve(p));
+      if (s.isDirectory()) {
+        return p.replace(/\/$/, '') + '/**/*';
+      }
+    } catch {
+      // Not a real path — must be a glob pattern, pass through
+    }
+    return p;
+  })
+);
+
+const allFiles = await fg(expandedPositionals, {
+  dot: true,
+  onlyFiles: true,
+  absolute: true,
   cwd: process.cwd(),
 });
 
 if (allFiles.length === 0 && positionals.length > 0 && !values.quiet) {
-  console.warn("No files matched. Note: fjoin does not expand directories automatically. Use globs like 'src/**/*'");
+  console.warn("No files matched. Check that the paths or glob patterns exist.");
 }
 
 // 2. Process the unified list
@@ -239,13 +245,6 @@ for (const absolutePath of allFiles) {
 
   // Process the file
   await processPath(absolutePath);
-}
-
-if (skippedDirectories.length > 0 && !values.quiet) {
-  console.warn(`Warning: ${skippedDirectories.length} director${skippedDirectories.length !== 1 ? 'ies' : 'y'} skipped (pass files or use globs like 'dir/**/*'):`);
-  for (const dir of skippedDirectories) {
-    console.warn(`  ${dir}`);
-  }
 }
 
 if (skippedBinaryFiles.length > 0 && !values.quiet) {
