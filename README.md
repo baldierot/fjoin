@@ -26,6 +26,7 @@ The `<files...>` argument accepts file paths or glob patterns.
 - `-f, --force`: Overwrite output file if it exists.
 - `-i, --no-gitignore`: Ignore .gitignore patterns.
 - `-I, --include <pattern>`: Include files matching glob pattern even if gitignored.
+- `-e, --exclude <pattern>`: Exclude files matching glob pattern.
 - `-g, --ignore-file <file>`: Use a custom ignore file with .gitignore syntax.
 - `-q, --quiet`: Suppress all non-essential output (warnings, errors, success messages).
 - `-h, --help`: Show help message.
@@ -73,4 +74,14 @@ fjoin "src/*" -g .fjoinignore -g team.ignorelist
 Use only custom ignore file (ignore .gitignore):
 ```bash
 fjoin "src/*" --no-gitignore -g .fjoinignore
+```
+
+Exclude test files from output:
+```bash
+fjoin "src/**/*" --exclude "*.test.ts"
+```
+
+Exclude multiple file patterns:
+```bash
+fjoin "src/*" -e "*.spec.js" -e "*.d.ts"
 ```

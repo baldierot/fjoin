@@ -27,6 +27,11 @@ const { values, positionals } = parseArgs({
       multiple: true,
       short: "I",
     },
+    exclude: {
+      type: "string",
+      multiple: true,
+      short: "e",
+    },
     'ignore-file': {
       type: "string",
       short: "g",
@@ -59,6 +64,7 @@ Options:
   -f, --force            Overwrite output file if it exists.
   -i, --no-gitignore     Ignore .gitignore patterns.
   -I, --include <pattern> Include files matching glob pattern even if gitignored.
+  -e, --exclude <pattern> Exclude files matching glob pattern (repeatable).
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
   -q, --quiet            Suppress all non-essential output (warnings, errors, success messages).
   -h, --help             Show this help message.
@@ -158,6 +164,16 @@ for (const pattern of includePatterns) {
   }
 }
 
+// Expand exclude patterns to get absolute file paths
+const excludePatterns = values.exclude || [];
+const excludeFiles = new Set();
+for (const pattern of excludePatterns) {
+  const files = await fg.glob(pattern, { onlyFiles: true, absolute: true });
+  for (const file of files) {
+    excludeFiles.add(file);
+  }
+}
+
 // Each entry is { ig, patterns }
 const customIgnores = await Promise.all(
   customIgnoreFiles.map(f => readIgnoreFile(f))
@@ -197,6 +213,12 @@ for (const absolutePath of allFiles) {
 
   const isIgnored = isGitIgnored || isCustomIgnored;
   const isForceIncluded = includeFiles.has(absolutePath);
+  const isExcluded = excludeFiles.has(absolutePath);
+
+  if (isExcluded) {
+    skippedFiles.push(relPath);
+    continue;
+  }
 
   if (isIgnored && !isForceIncluded) {
     skippedFiles.push(relPath);
