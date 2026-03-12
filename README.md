@@ -24,8 +24,8 @@ The `<files...>` argument accepts file paths or glob patterns.
 
 - `-o, --output <file>`: Save the combined output to a file instead of printing to stdout.
 - `-f, --force`: Overwrite output file if it exists.
-- `-i, --no-gitignore`: Ignore .gitignore patterns.
-- `-I, --include <pattern>`: Include files matching glob pattern even if gitignored.
+- `-I, --no-gitignore`: Ignore .gitignore patterns.
+- `-i, --include <pattern>`: Include files matching glob pattern even if gitignored.
 - `-e, --exclude <pattern>`: Exclude files matching glob pattern.
 - `-g, --ignore-file <file>`: Use a custom ignore file with .gitignore syntax.
 - `-q, --quiet`: Suppress all non-essential output (warnings, errors, success messages).

@@ -20,12 +20,12 @@ const { values, positionals } = parseArgs({
     },
     'no-gitignore': {
       type: "boolean",
-      short: "i",
+      short: "I",
     },
     include: {
       type: "string",
       multiple: true,
-      short: "I",
+      short: "i",
     },
     exclude: {
       type: "string",
@@ -62,8 +62,8 @@ Always quote glob patterns to prevent shell expansion. Use **/* for recursive ma
 Options:
   -o, --output <file>    Save the combined output to a file instead of printing to stdout.
   -f, --force            Overwrite output file if it exists.
-  -i, --no-gitignore     Ignore .gitignore patterns.
-  -I, --include <pattern> Include files matching glob pattern even if gitignored.
+  -I, --no-gitignore     Ignore .gitignore patterns.
+  -i, --include <pattern> Include files matching glob pattern even if gitignored.
   -e, --exclude <pattern> Exclude files matching glob pattern (repeatable).
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
   -q, --quiet            Suppress all non-essential output (warnings, errors, success messages).
@@ -72,8 +72,8 @@ Options:
 Examples:
   fjoin file1.ts file2.ts
   fjoin "src/**/*.ts" -o combined.md
-  fjoin "src/*" -i
-  fjoin "src/*" -I "*.tsbuildinfo"
+  fjoin "src/*" -I
+  fjoin "src/*" -i "*.tsbuildinfo"
   fjoin "src/*" -q | pbcopy    # Quiet mode for piping to clipboard (macOS)
   fjoin "src/*" -q | xclip     # Quiet mode for piping to clipboard (Linux X11)
   fjoin "src/*" -q | wl-copy   # Quiet mode for piping to clipboard (Linux Wayland)
@@ -247,7 +247,7 @@ if (skippedFiles.length > 0 && !values.quiet) {
   for (const [pattern, count] of skippedPatterns) {
     console.warn(`  ${pattern} (${count} file${count !== 1 ? 's' : ''})`);
   }
-  console.warn(`Use -i/--no-gitignore to include them, or -I/--include <pattern> to selectively include.`);
+  console.warn(`Use -I/--no-gitignore to include them, or -i/--include <pattern> to selectively include.`);
 }
 
 const result = resultParts.join('');
