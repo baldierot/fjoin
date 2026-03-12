@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { resolve, relative } from "node:path";
+import { resolve, relative, dirname } from "node:path";
 import { stat, readFile, writeFile, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import fg from "fast-glob";
@@ -83,20 +83,54 @@ let resultParts = [];
 let gitignorePatterns = [];
 let skippedBinaryFiles = [];
 
-async function readGitignore() {
-  const ig = ignore();
-  ig.add('.git/'); // Always ignore .git directory
-  try {
-    const gitignoreContent = await readFile('.gitignore', 'utf-8');
-    // Parse and store patterns
-    gitignorePatterns = gitignoreContent.split('\n')
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith('#'));
-    return ig.add(gitignoreContent);
-  } catch {
-    // .gitignore doesn't exist, return the instance with only .git/ ignored
-    return ig;
+async function readGitignores() {
+  const gitignores = [];
+  const rootIg = ignore();
+  
+  if (values['no-gitignore']) {
+    return [{ relDir: '.', ig: rootIg, patterns: [] }];
   }
+
+  rootIg.add('.git/'); // Always ignore .git directory by default
+
+  try {
+    const files = await fg.glob('**/.gitignore', { 
+      dot: true, 
+      absolute: true, 
+      cwd: process.cwd(),
+      ignore: ['**/node_modules/**'] 
+    });
+
+    for (const file of files) {
+      const relDir = relative(process.cwd(), dirname(file));
+      const content = await readFile(file, 'utf-8');
+      const patterns = content.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+
+      if (relDir === '' || relDir === '.') {
+        rootIg.add(content);
+        gitignorePatterns.push(...patterns.map(p => ({ pattern: p, relDir: '.' })));
+      } else {
+        gitignores.push({
+          relDir,
+          ig: ignore().add(content),
+          patterns
+        });
+        gitignorePatterns.push(...patterns.map(p => ({ pattern: p, relDir })));
+      }
+    }
+  } catch (e) {
+    if (values.verbose) {
+      console.error(`Error finding .gitignore files: ${e.message}`);
+    }
+  }
+
+  if (!gitignores.some(g => g.relDir === '.')) {
+    gitignores.push({ relDir: '.', ig: rootIg, patterns: [] });
+  }
+
+  return gitignores;
 }
 
 async function readIgnoreFile(filePath) {
@@ -139,7 +173,7 @@ async function processPath(absolutePath) {
   }
 }
 
-const gitignore = values['no-gitignore'] ? null : await readGitignore();
+const gitignores = await readGitignores();
 const includePatterns = values.include || [];
 const customIgnoreFiles = values['ignore-file'] || [];
 
@@ -190,8 +224,22 @@ if (allFiles.length === 0 && positionals.length > 0 && values.verbose) {
 for (const absolutePath of allFiles) {
   const relPath = relative(process.cwd(), absolutePath);
 
-  // Existing gitignore check
-  const isGitIgnored = gitignore ? gitignore.ignores(relPath) : false;
+  // Check all applicable gitignores
+  let isGitIgnored = false;
+  for (const { relDir, ig } of gitignores) {
+    if (relDir === '.' || relDir === '') {
+      if (ig.ignores(relPath)) {
+        isGitIgnored = true;
+        break;
+      }
+    } else if (relPath.startsWith(relDir + '/')) {
+      const subRelPath = relPath.slice(relDir.length + 1);
+      if (ig.ignores(subRelPath)) {
+        isGitIgnored = true;
+        break;
+      }
+    }
+  }
 
   // New: check all custom ignore files
   const isCustomIgnored = customIgnores.some(({ ig }) => ig.ignores(relPath));
@@ -209,11 +257,37 @@ for (const absolutePath of allFiles) {
     skippedFiles.push(relPath);
 
     // Pattern attribution: check gitignore patterns first, then custom
-    for (const pattern of gitignorePatterns) {
-      if (ignore().add(pattern).ignores(relPath)) {
-        skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
-        break;
+    let attributed = false;
+    for (const { pattern, relDir } of gitignorePatterns) {
+      const ig = ignore().add(pattern);
+      if (relDir === '.' || relDir === '') {
+        if (ig.ignores(relPath)) {
+          skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+          attributed = true;
+          break;
+        }
+      } else if (relPath.startsWith(relDir + '/')) {
+        const subRelPath = relPath.slice(relDir.length + 1);
+        if (ig.ignores(subRelPath)) {
+          skippedPatterns.set(`${relDir}/${pattern}`, (skippedPatterns.get(pattern) || 0) + 1);
+          attributed = true;
+          break;
+        }
       }
+    }
+    
+    if (!attributed) {
+       // Check custom ignores if not attributed to gitignore
+       for (const { patterns } of customIgnores) {
+         for (const pattern of patterns) {
+           if (ignore().add(pattern).ignores(relPath)) {
+             skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+             attributed = true;
+             break;
+           }
+         }
+         if (attributed) break;
+       }
     }
     continue;
   }
