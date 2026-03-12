@@ -176,7 +176,7 @@ const expandedPositionals = await Promise.all(
 );
 
 const allFiles = await fg.glob(expandedPositionals, {
-  dot: true,
+  dot: false,
   onlyFiles: true,
   absolute: true,
   cwd: process.cwd(),

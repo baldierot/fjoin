@@ -65,7 +65,7 @@ test('respects .gitignore and ignores .git/ by default', async (t) => {
 });
 
 test('--no-gitignore flag', (t) => {
-  const result = run('. --no-gitignore');
+  const result = run('. .git --no-gitignore');
   assert.strictEqual(result.status, 0);
   assert.ok(result.stdout.includes('# FILE: ignored.txt'));
   assert.ok(result.stdout.includes('# FILE: .git/config'));
