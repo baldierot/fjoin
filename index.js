@@ -82,21 +82,23 @@ Examples:
   process.exit(0);
 }
 
-let result = "";
+let resultParts = [];
 let gitignorePatterns = [];
 let skippedBinaryFiles = [];
 
 async function readGitignore() {
+  const ig = ignore();
+  ig.add('.git/'); // Always ignore .git directory
   try {
     const gitignoreContent = await readFile('.gitignore', 'utf-8');
     // Parse and store patterns
     gitignorePatterns = gitignoreContent.split('\n')
       .map(line => line.trim())
       .filter(line => line && !line.startsWith('#'));
-    return ignore().add(gitignoreContent);
+    return ig.add(gitignoreContent);
   } catch {
-    // .gitignore doesn't exist, return an empty ignore instance
-    return ignore();
+    // .gitignore doesn't exist, return the instance with only .git/ ignored
+    return ig;
   }
 }
 
@@ -123,21 +125,21 @@ async function processPath(absolutePath) {
     // Check if file is binary using content-based detection
     const binary = await isBinaryFile(absolutePath);
     if (binary) {
-      skippedBinaryFiles.push(absolutePath);
+      skippedBinaryFiles.push(relativePath);
       return;
     }
 
     const content = await readFile(absolutePath, 'utf-8');
     const ext = relativePath.split('.').pop() || '';
 
-    result += `# FILE: ${relativePath}\n\n`;
-    result += "```" + ext + "\n";
-    result += content;
-    if (!content.endsWith('\n')) result += '\n';
-    result += "```\n\n---\n\n";
+    resultParts.push(`# FILE: ${relativePath}\n\n`);
+    resultParts.push("```" + ext + "\n");
+    resultParts.push(content);
+    if (!content.endsWith('\n')) resultParts.push('\n');
+    resultParts.push("```\n\n---\n\n");
   } catch (e) {
     if (!values.quiet) {
-      console.error(`Error reading ${absolutePath}: ${e.message}`);
+      console.error(`Error reading ${relativePath}: ${e.message}`);
     }
   }
 }
@@ -146,32 +148,9 @@ const gitignore = values['no-gitignore'] ? null : await readGitignore();
 const includePatterns = values.include || [];
 const customIgnoreFiles = values['ignore-file'] || [];
 
-// Expand include patterns to get absolute file paths
-const includeFiles = new Set();
-for (let pattern of includePatterns) {
-  try {
-    const s = await stat(resolve(pattern));
-    if (s.isDirectory()) pattern = pattern.replace(/\/$/, '') + '/**/*';
-  } catch { /* not a real path, treat as glob */ }
-  const files = await fg.glob(pattern, { onlyFiles: true, absolute: true });
-  for (const file of files) {
-    includeFiles.add(file);
-  }
-}
-
-// Expand exclude patterns to get absolute file paths
-const excludePatterns = values.exclude || [];
-const excludeFiles = new Set();
-for (let pattern of excludePatterns) {
-  try {
-    const s = await stat(resolve(pattern));
-    if (s.isDirectory()) pattern = pattern.replace(/\/$/, '') + '/**/*';
-  } catch { /* not a real path, treat as glob */ }
-  const files = await fg.glob(pattern, { onlyFiles: true, absolute: true });
-  for (const file of files) {
-    excludeFiles.add(file);
-  }
-}
+// Use 'ignore' for both include and exclude patterns for better performance and consistency
+const includeIg = ignore().add(includePatterns);
+const excludeIg = ignore().add(values.exclude || []);
 
 // Each entry is { ig, patterns }
 const customIgnores = await Promise.all(
@@ -223,8 +202,8 @@ for (const absolutePath of allFiles) {
   const isCustomIgnored = customIgnores.some(({ ig }) => ig.ignores(relPath));
 
   const isIgnored = isGitIgnored || isCustomIgnored;
-  const isForceIncluded = includeFiles.has(absolutePath);
-  const isExcluded = excludeFiles.has(absolutePath);
+  const isForceIncluded = includeIg.ignores(relPath);
+  const isExcluded = excludeIg.ignores(relPath);
 
   if (isExcluded) {
     skippedFiles.push(relPath);
@@ -271,6 +250,8 @@ if (skippedFiles.length > 0 && !values.quiet) {
   console.warn(`Use -i/--no-gitignore to include them, or -I/--include <pattern> to selectively include.`);
 }
 
+const result = resultParts.join('');
+
 if (values.output) {
   const outputPath = values.output;
 
@@ -283,9 +264,17 @@ if (values.output) {
   } catch {
     // File doesn't exist, proceed
   }
-  await writeFile(outputPath, result);
-  if (!values.quiet) {
-    console.log(`Context written to ${outputPath}`);
+  
+  try {
+    await writeFile(outputPath, result);
+    if (!values.quiet) {
+      console.log(`Context written to ${outputPath}`);
+    }
+  } catch (e) {
+    if (!values.quiet) {
+      console.error(`Error writing to '${outputPath}': ${e.message}`);
+    }
+    process.exit(1);
   }
 } else {
   process.stdout.write(result);

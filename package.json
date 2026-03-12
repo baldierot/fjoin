@@ -6,6 +6,9 @@
   "bin": {
     "fjoin": "./index.js"
   },
+  "scripts": {
+    "test": "node tests/fjoin.test.js"
+  },
   "private": true,
   "dependencies": {
     "fast-glob": "^3.3.2",
