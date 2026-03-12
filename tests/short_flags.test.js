@@ -33,7 +33,13 @@ test('short flag -i for --include', (t) => {
 });
 
 test('short flag -I for --no-gitignore', (t) => {
-  const result = run('. -I --quiet');
+  const result = run('. -I');
   assert.strictEqual(result.status, 0);
   assert.ok(result.stdout.includes('# FILE: ignored.txt'), 'Should include ignored file with -I');
+});
+
+test('short flag -v for --verbose', (t) => {
+  const result = run('. -v');
+  assert.strictEqual(result.status, 0);
+  assert.ok(result.stderr.includes('gitignored file(s) skipped'), 'Should show warnings with -v');
 });

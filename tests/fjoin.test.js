@@ -65,7 +65,7 @@ test('respects .gitignore and ignores .git/ by default', async (t) => {
 });
 
 test('--no-gitignore flag', (t) => {
-  const result = run('. --no-gitignore --quiet');
+  const result = run('. --no-gitignore');
   assert.strictEqual(result.status, 0);
   assert.ok(result.stdout.includes('# FILE: ignored.txt'));
   assert.ok(result.stdout.includes('# FILE: .git/config'));
@@ -107,10 +107,10 @@ test('--force flag', async (t) => {
   await fs.unlink(outputPath);
 });
 
-test('--quiet flag', (t) => {
-  const result = run('. --quiet');
+test('--verbose flag', (t) => {
+  const result = run('. --verbose');
   assert.strictEqual(result.status, 0);
-  assert.strictEqual(result.stderr, '');
+  assert.ok(result.stderr.includes('gitignored file(s) skipped'), 'Should show warnings in verbose mode');
 });
 
 test('custom ignore file', async (t) => {
@@ -132,7 +132,7 @@ test('relative paths in warnings', async (t) => {
   const binaryFile = join(SAMPLE_PROJECT, 'test.bin');
   await fs.writeFile(binaryFile, Buffer.from([0, 1, 2, 3]));
   
-  const result = run('test.bin');
+  const result = run('test.bin --verbose');
   assert.ok(result.stderr.includes('  test.bin'));
   assert.ok(!result.stderr.includes(SAMPLE_PROJECT));
   

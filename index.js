@@ -37,9 +37,9 @@ const { values, positionals } = parseArgs({
       short: "g",
       multiple: true,
     },
-    quiet: {
+    verbose: {
       type: "boolean",
-      short: "q",
+      short: "v",
     },
     help: {
       type: "boolean",
@@ -66,7 +66,7 @@ Options:
   -i, --include <pattern> Include files matching glob pattern even if gitignored.
   -e, --exclude <pattern> Exclude files matching glob pattern (repeatable).
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
-  -q, --quiet            Suppress all non-essential output (warnings, errors, success messages).
+  -v, --verbose          Show detailed output (warnings and success messages).
   -h, --help             Show this help message.
 
 Examples:
@@ -74,10 +74,7 @@ Examples:
   fjoin "src/**/*.ts" -o combined.md
   fjoin "src/*" -I
   fjoin "src/*" -i "*.tsbuildinfo"
-  fjoin "src/*" -q | pbcopy    # Quiet mode for piping to clipboard (macOS)
-  fjoin "src/*" -q | xclip     # Quiet mode for piping to clipboard (Linux X11)
-  fjoin "src/*" -q | wl-copy   # Quiet mode for piping to clipboard (Linux Wayland)
-  fjoin "src/*" -q | clip      # Quiet mode for piping to clipboard (Windows)
+  fjoin "src/*" | pbcopy    # Default is quiet, perfect for piping
   `);
   process.exit(0);
 }
@@ -111,9 +108,7 @@ async function readIgnoreFile(filePath) {
       .filter(line => line && !line.startsWith('#'));
     return { ig: ignore().add(content), patterns };
   } catch (e) {
-    if (!values.quiet) {
-      console.error(`Error reading ignore file '${filePath}': ${e.message}`);
-    }
+    console.error(`Error reading ignore file '${filePath}': ${e.message}`);
     process.exit(1);
   }
 }
@@ -138,7 +133,7 @@ async function processPath(absolutePath) {
     if (!content.endsWith('\n')) resultParts.push('\n');
     resultParts.push("```\n\n---\n\n");
   } catch (e) {
-    if (!values.quiet) {
+    if (values.verbose) {
       console.error(`Error reading ${relativePath}: ${e.message}`);
     }
   }
@@ -187,7 +182,7 @@ const allFiles = await fg.glob(expandedPositionals, {
   cwd: process.cwd(),
 });
 
-if (allFiles.length === 0 && positionals.length > 0 && !values.quiet) {
+if (allFiles.length === 0 && positionals.length > 0 && values.verbose) {
   console.warn("No files matched. Check that the paths or glob patterns exist.");
 }
 
@@ -231,18 +226,18 @@ for (const absolutePath of allFiles) {
   await processPath(absolutePath);
 }
 
-if (skippedBinaryFiles.length > 0 && !values.quiet) {
+if (skippedBinaryFiles.length > 0 && values.verbose) {
   console.warn(`Warning: ${skippedBinaryFiles.length} binary file(s) skipped:`);
   for (const file of skippedBinaryFiles) {
     console.warn(`  ${file}`);
   }
 }
 
-if (forceIncludedFiles.length > 0 && !values.quiet) {
+if (forceIncludedFiles.length > 0 && values.verbose) {
   console.warn(`${forceIncludedFiles.length} gitignored file(s) included via --include.`);
 }
 
-if (skippedFiles.length > 0 && !values.quiet) {
+if (skippedFiles.length > 0 && values.verbose) {
   console.warn(`Warning: ${skippedFiles.length} gitignored file(s) skipped:`);
   for (const [pattern, count] of skippedPatterns) {
     console.warn(`  ${pattern} (${count} file${count !== 1 ? 's' : ''})`);
@@ -267,13 +262,11 @@ if (values.output) {
   
   try {
     await writeFile(outputPath, result);
-    if (!values.quiet) {
+    if (values.verbose) {
       console.log(`Context written to ${outputPath}`);
     }
   } catch (e) {
-    if (!values.quiet) {
-      console.error(`Error writing to '${outputPath}': ${e.message}`);
-    }
+    console.error(`Error writing to '${outputPath}': ${e.message}`);
     process.exit(1);
   }
 } else {

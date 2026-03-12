@@ -35,7 +35,7 @@ function run(args, cwd = TEST_DIR) {
 }
 
 test('excluding multiple directories', (t) => {
-  const result = run('. --exclude dir1 --exclude dir2 --no-gitignore --quiet');
+  const result = run('. --exclude dir1 --exclude dir2 --no-gitignore');
   assert.strictEqual(result.status, 0);
   assert.ok(!result.stdout.includes('dir1/file.txt'), 'Should exclude dir1/file.txt');
   assert.ok(!result.stdout.includes('dir2/file.txt'), 'Should exclude dir2/file.txt');
@@ -43,14 +43,14 @@ test('excluding multiple directories', (t) => {
 });
 
 test('excluding directory with hidden files', (t) => {
-  const result = run('. --exclude dir1 --no-gitignore --quiet');
+  const result = run('. --exclude dir1 --no-gitignore');
   assert.strictEqual(result.status, 0);
   assert.ok(!result.stdout.includes('dir1/file.txt'), 'Should exclude dir1/file.txt');
   assert.ok(!result.stdout.includes('dir1/.hidden'), 'Should exclude dir1/.hidden');
 });
 
 test('excluding directories using glob pattern', (t) => {
-  const result = run('. --exclude "dir*" --no-gitignore --quiet');
+  const result = run('. --exclude "dir*" --no-gitignore');
   assert.strictEqual(result.status, 0);
   assert.ok(!result.stdout.includes('dir1/file.txt'), 'Should exclude dir1/file.txt when matched by glob');
   assert.ok(!result.stdout.includes('dir2/file.txt'), 'Should exclude dir2/file.txt when matched by glob');

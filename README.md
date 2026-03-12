@@ -28,7 +28,7 @@ The `<files...>` argument accepts file paths or glob patterns.
 - `-i, --include <pattern>`: Include files matching glob pattern even if gitignored.
 - `-e, --exclude <pattern>`: Exclude files matching glob pattern.
 - `-g, --ignore-file <file>`: Use a custom ignore file with .gitignore syntax.
-- `-q, --quiet`: Suppress all non-essential output (warnings, errors, success messages).
+- `-v, --verbose`: Show detailed output (warnings and success messages).
 - `-h, --help`: Show help message.
 
 ### Examples
@@ -53,12 +53,12 @@ Selectively include gitignored files:
 fjoin "src/*" --include "*.tsbuildinfo"
 ```
 
-Suppress all non-essential output (useful for piping to clipboard):
+Suppress all non-essential output (default behavior, useful for piping to clipboard):
 ```bash
-fjoin "src/*" --quiet | pbcopy    # macOS
-fjoin "src/*" --quiet | xclip     # Linux (X11)
-fjoin "src/*" --quiet | wl-copy   # Linux (Wayland)
-fjoin "src/*" --quiet | clip      # Windows
+fjoin "src/*" | pbcopy    # macOS
+fjoin "src/*" | xclip     # Linux (X11)
+fjoin "src/*" | wl-copy   # Linux (Wayland)
+fjoin "src/*" | clip      # Windows
 ```
 
 Use a custom ignore file:
