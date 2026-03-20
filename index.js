@@ -64,7 +64,9 @@ Options:
   -f, --force            Overwrite output file if it exists.
   -I, --no-gitignore     Ignore .gitignore patterns.
   -i, --include <pattern> Include files matching glob pattern even if gitignored.
+                         (e.g., "*.lock" matches all .lock files in any directory).
   -e, --exclude <pattern> Exclude files matching glob pattern (repeatable).
+                         (e.g., "node_modules/*" or "*.test.js").
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
   -v, --verbose          Show detailed output (warnings and success messages).
   -h, --help             Show this help message.
@@ -74,9 +76,24 @@ Examples:
   fjoin "src/**/*.ts" -o combined.md
   fjoin "src/*" -I
   fjoin "src/*" -i "*.tsbuildinfo"
+  fjoin "src/**/*" -e "*.lock"  # Exclude all .lock files recursively
   fjoin "src/*" | pbcopy    # Default is quiet, perfect for piping
   `);
   process.exit(0);
+}
+
+// Pre-check: if output file exists and --force is not specified, fail early
+if (values.output) {
+  const outputPath = values.output;
+  try {
+    await access(outputPath, constants.F_OK);
+    if (!values.force) {
+      console.error(`Error: Output file '${outputPath}' already exists. Use -f or --force to overwrite.`);
+      process.exit(1);
+    }
+  } catch {
+    // File doesn't exist, proceed
+  }
 }
 
 let resultParts = [];
@@ -324,16 +341,6 @@ const result = resultParts.join('');
 if (values.output) {
   const outputPath = values.output;
 
-  try {
-    await access(outputPath, constants.F_OK);
-    if (!values.force) {
-      console.error(`Error: Output file '${outputPath}' already exists. Use -f or --force to overwrite.`);
-      process.exit(1);
-    }
-  } catch {
-    // File doesn't exist, proceed
-  }
-  
   try {
     await writeFile(outputPath, result);
     if (values.verbose) {

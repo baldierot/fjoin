@@ -25,9 +25,18 @@ The `<files...>` argument accepts file paths or glob patterns.
 - `-o, --output <file>`: Save the combined output to a file instead of printing to stdout.
 - `-f, --force`: Overwrite output file if it exists.
 - `-I, --no-gitignore`: Ignore .gitignore patterns.
-- `-i, --include <pattern>`: Include files matching glob pattern even if gitignored.
-- `-e, --exclude <pattern>`: Exclude files matching glob pattern.
+- `-i, --include <pattern>`: Include files matching glob pattern even if gitignored. Patterns without a slash match files in any directory (e.g., `*.lock`).
+- `-e, --exclude <pattern>`: Exclude files matching glob pattern (repeatable). Patterns without a slash match files in any directory (e.g., `*.test.js`).
 - `-g, --ignore-file <file>`: Use a custom ignore file with .gitignore syntax.
+
+### How Patterns Work
+
+Patterns for `--include` and `--exclude` follow the standard `.gitignore` rules:
+
+-   `*.lock`: Matches any `.lock` file in **any** directory.
+-   `temp/`: Matches the `temp` folder and its contents in **any** directory.
+-   `/temp/`: Matches the `temp` folder only at the **root** of your search.
+-   `**/*.js`: Matches any `.js` file in **any** directory.
 - `-v, --verbose`: Show detailed output (warnings and success messages).
 - `-h, --help`: Show help message.
 
