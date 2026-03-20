@@ -226,12 +226,17 @@ const expandedPositionals = await Promise.all(
   })
 );
 
-const allFiles = await fg.glob(expandedPositionals, {
+let allFiles = await fg.glob(expandedPositionals, {
   dot: false,
   onlyFiles: true,
   absolute: true,
   cwd: process.cwd(),
 });
+
+if (values.output) {
+  const absoluteOutputPath = resolve(values.output);
+  allFiles = allFiles.filter(f => f !== absoluteOutputPath);
+}
 
 if (allFiles.length === 0 && positionals.length > 0 && values.verbose) {
   console.warn("No files matched. Check that the paths or glob patterns exist.");

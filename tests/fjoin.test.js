@@ -107,6 +107,21 @@ test('--force flag', async (t) => {
   await fs.unlink(outputPath);
 });
 
+test('--force flag prevents recursive inclusion', async (t) => {
+  const outputPath = join(SAMPLE_PROJECT, 'recursive.md');
+  // First run to create the file
+  run(`. --output recursive.md`);
+  
+  // Second run with --force
+  const result = run(`. --output recursive.md --force`);
+  assert.strictEqual(result.status, 0);
+  
+  const content = await fs.readFile(outputPath, 'utf-8');
+  const matches = content.match(/# FILE: recursive\.md/g);
+  assert.strictEqual(matches, null, 'Output file should not be included in itself');
+  await fs.unlink(outputPath);
+});
+
 test('--verbose flag', (t) => {
   const result = run('. --verbose');
   assert.strictEqual(result.status, 0);
