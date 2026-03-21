@@ -16,7 +16,7 @@ npm install -g github:baldierot/fjoin
 fjoin <files...> [options]
 ```
 
-The `<files...>` argument accepts file paths or glob patterns.
+The `<files...>` argument accepts file paths or glob patterns. **Note:** Explicitly provided paths or glob patterns are treated as implicit includes and will override `.gitignore` rules.
 
 **Important:** Always quote glob patterns (e.g., `"src/**/*"`) to prevent your shell from expanding them before fjoin receives them.
 
@@ -25,7 +25,7 @@ The `<files...>` argument accepts file paths or glob patterns.
 - `-o, --output <file>`: Save the combined output to a file instead of printing to stdout.
 - `-f, --force`: Overwrite output file if it exists.
 - `-I, --no-gitignore`: Ignore .gitignore patterns.
-- `-i, --include <pattern>`: Include files matching glob pattern even if gitignored. Patterns without a slash match files in any directory (e.g., `*.lock`).
+- `-i, --include <pattern>`: Include files matching glob pattern even if gitignored. **Takes priority over --exclude**. Patterns without a slash match files in any directory (e.g., `*.lock`).
 - `-e, --exclude <pattern>`: Exclude files matching glob pattern (repeatable). Patterns without a slash match files in any directory (e.g., `*.test.js`).
 - `-g, --ignore-file <file>`: Use a custom ignore file with .gitignore syntax.
 

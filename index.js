@@ -50,13 +50,14 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
 });
 
-if (values.help || (positionals.length === 0)) {
+if (values.help || (positionals.length === 0 && !values.include && !values['ignore-file'])) {
   console.log(`
 fjoin - A simple utility to concatenate files into a single document with clear headers and relative paths.
 
 Usage: fjoin <files...> [options]
 
 The <files...> argument accepts file paths or glob patterns.
+Note: Explicitly provided paths/globs are treated as includes (overriding .gitignore).
 Always quote glob patterns to prevent shell expansion. Use **/* for recursive matching.
 
 Options:
@@ -64,7 +65,7 @@ Options:
   -f, --force            Overwrite output file if it exists.
   -I, --no-gitignore     Ignore .gitignore patterns.
   -i, --include <pattern> Include files matching glob pattern even if gitignored.
-                         (e.g., "*.lock" matches all .lock files in any directory).
+                         Takes priority over --exclude. (e.g., "*.lock").
   -e, --exclude <pattern> Exclude files matching glob pattern (repeatable).
                          (e.g., "node_modules/*" or "*.test.js").
   -g, --ignore-file <file> Use a custom ignore file with .gitignore syntax (repeatable).
@@ -74,10 +75,10 @@ Options:
 Examples:
   fjoin file1.ts file2.ts
   fjoin "src/**/*.ts" -o combined.md
-  fjoin "src/*" -I
-  fjoin "src/*" -i "*.tsbuildinfo"
-  fjoin "src/**/*" -e "*.lock"  # Exclude all .lock files recursively
-  fjoin "src/*" | pbcopy    # Default is quiet, perfect for piping
+  fjoin -i "*test*" -i "*tests*"  # Include tests even if gitignored
+  fjoin . -e "*" -i "*test*"      # Exclude all EXCEPT tests
+  fjoin "src/**/*" -e "*.lock"    # Exclude all .lock files recursively
+  fjoin "src/*" | pbcopy          # Default is quiet, perfect for piping
   `);
   process.exit(0);
 }
@@ -192,11 +193,35 @@ async function processPath(absolutePath) {
 
 const gitignores = await readGitignores();
 const includePatterns = values.include || [];
-const customIgnoreFiles = values['ignore-file'] || [];
 
-// Use 'ignore' for both include and exclude patterns for better performance and consistency
-const includeIg = ignore().add(includePatterns);
-const excludeIg = ignore().add(values.exclude || []);
+// 1. Determine positionals and implicit includes
+let effectivePositionals = positionals;
+if (effectivePositionals.length === 0) {
+  if (includePatterns.length > 0) {
+    effectivePositionals = includePatterns;
+  } else {
+    effectivePositionals = ['.'];
+  }
+}
+
+const expandedPositionals = await Promise.all(
+  effectivePositionals.map(async (p) => {
+    try {
+      const s = await stat(resolve(p));
+      if (s.isDirectory()) {
+        return p.replace(/\/$/, '') + '/**/*';
+      }
+      // If it's a file, it's an implicit include
+      includePatterns.push(p);
+    } catch {
+      // Not a real path — must be a glob pattern, treat as implicit include
+      includePatterns.push(p);
+    }
+    return p;
+  })
+);
+
+const customIgnoreFiles = values['ignore-file'] || [];
 
 // Each entry is { ig, patterns }
 const customIgnores = await Promise.all(
@@ -205,26 +230,16 @@ const customIgnores = await Promise.all(
 
 // Merge all custom patterns into the global tracking arrays
 for (const { patterns } of customIgnores) {
-  gitignorePatterns.push(...patterns);
+  gitignorePatterns.push(...patterns.map(p => ({ pattern: p, relDir: '.' })));
 }
 
 let skippedFiles = [];
 let skippedPatterns = new Map();
 let forceIncludedFiles = [];
 
-const expandedPositionals = await Promise.all(
-  positionals.map(async (p) => {
-    try {
-      const s = await stat(resolve(p));
-      if (s.isDirectory()) {
-        return p.replace(/\/$/, '') + '/**/*';
-      }
-    } catch {
-      // Not a real path — must be a glob pattern, pass through
-    }
-    return p;
-  })
-);
+// Use 'ignore' for both include and exclude patterns for better performance and consistency
+const includeIg = ignore().add(includePatterns);
+const excludeIg = ignore().add(values.exclude || []);
 
 let allFiles = await fg.glob(expandedPositionals, {
   dot: false,
@@ -246,75 +261,77 @@ if (allFiles.length === 0 && positionals.length > 0 && values.verbose) {
 for (const absolutePath of allFiles) {
   const relPath = relative(process.cwd(), absolutePath);
 
-  // Check all applicable gitignores
-  let isGitIgnored = false;
-  for (const { relDir, ig } of gitignores) {
-    if (relDir === '.' || relDir === '') {
-      if (ig.ignores(relPath)) {
-        isGitIgnored = true;
-        break;
-      }
-    } else if (relPath.startsWith(relDir + '/')) {
-      const subRelPath = relPath.slice(relDir.length + 1);
-      if (ig.ignores(subRelPath)) {
-        isGitIgnored = true;
-        break;
-      }
-    }
-  }
-
-  // New: check all custom ignore files
-  const isCustomIgnored = customIgnores.some(({ ig }) => ig.ignores(relPath));
-
-  const isIgnored = isGitIgnored || isCustomIgnored;
+  // Check if it should be force included (overrides everything else)
   const isForceIncluded = includeIg.ignores(relPath);
-  const isExcluded = excludeIg.ignores(relPath);
+  
+  if (!isForceIncluded) {
+    // Check for explicit exclusion
+    if (excludeIg.ignores(relPath)) {
+      skippedFiles.push(relPath);
+      continue;
+    }
 
-  if (isExcluded) {
-    skippedFiles.push(relPath);
-    continue;
-  }
-
-  if (isIgnored && !isForceIncluded) {
-    skippedFiles.push(relPath);
-
-    // Pattern attribution: check gitignore patterns first, then custom
-    let attributed = false;
-    for (const { pattern, relDir } of gitignorePatterns) {
-      const ig = ignore().add(pattern);
+    // Check all applicable gitignores
+    let isGitIgnored = false;
+    for (const { relDir, ig } of gitignores) {
       if (relDir === '.' || relDir === '') {
         if (ig.ignores(relPath)) {
-          skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
-          attributed = true;
+          isGitIgnored = true;
           break;
         }
       } else if (relPath.startsWith(relDir + '/')) {
         const subRelPath = relPath.slice(relDir.length + 1);
         if (ig.ignores(subRelPath)) {
-          skippedPatterns.set(`${relDir}/${pattern}`, (skippedPatterns.get(pattern) || 0) + 1);
-          attributed = true;
+          isGitIgnored = true;
           break;
         }
       }
     }
-    
-    if (!attributed) {
-       // Check custom ignores if not attributed to gitignore
-       for (const { patterns } of customIgnores) {
-         for (const pattern of patterns) {
-           if (ignore().add(pattern).ignores(relPath)) {
-             skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
-             attributed = true;
-             break;
+
+    // New: check all custom ignore files
+    const isCustomIgnored = customIgnores.some(({ ig }) => ig.ignores(relPath));
+
+    if (isGitIgnored || isCustomIgnored) {
+      skippedFiles.push(relPath);
+
+      // Pattern attribution: check gitignore patterns first, then custom
+      let attributed = false;
+      for (const { pattern, relDir } of gitignorePatterns) {
+        const ig = ignore().add(pattern);
+        if (relDir === '.' || relDir === '') {
+          if (ig.ignores(relPath)) {
+            skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+            attributed = true;
+            break;
+          }
+        } else if (relPath.startsWith(relDir + '/')) {
+          const subRelPath = relPath.slice(relDir.length + 1);
+          if (ig.ignores(subRelPath)) {
+            skippedPatterns.set(`${relDir}/${pattern}`, (skippedPatterns.get(pattern) || 0) + 1);
+            attributed = true;
+            break;
+          }
+        }
+      }
+      
+      if (!attributed) {
+         // Check custom ignores if not attributed to gitignore
+         for (const { patterns } of customIgnores) {
+           for (const pattern of patterns) {
+             if (ignore().add(pattern).ignores(relPath)) {
+               skippedPatterns.set(pattern, (skippedPatterns.get(pattern) || 0) + 1);
+               attributed = true;
+               break;
+             }
            }
+           if (attributed) break;
          }
-         if (attributed) break;
-       }
+      }
+      continue;
     }
-    continue;
   }
 
-  if (isIgnored && isForceIncluded) {
+  if (isForceIncluded) {
     forceIncludedFiles.push(relPath);
   }
 
